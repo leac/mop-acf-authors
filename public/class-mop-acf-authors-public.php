@@ -70,6 +70,15 @@
 		private $random_authors = array();
 
 		/**
+		 * An array of what fields to display.
+		 *
+		 * @since    1.0.0
+		 * @access   private
+		 * @var      array    $author_fields_arr    An array of what fields to display.
+		 */
+		private $author_fields_arr = array();
+
+		/**
 		 * The authors page id.
 		 *
 		 * @since    1.0.0
@@ -98,6 +107,9 @@
 		function mop_acf_authors_plugin(){
 			// display fixed number unique authors: http://support.advancedcustomfields.com/forums/topic/wp_query-distinct-results
 			$author_posts_max = 3;
+
+			// plugin shows 3 fields: 'image , name, description'
+			$this->set_fields_array( 'image, name, description' );
 
 			/* Get all posts that have at least one author */
 			$meta_query = $this->author_meta_query( '', '!=' );
@@ -137,7 +149,7 @@
 					$author_info_group = $this->find_populated_author_field( $author_post->ID );
 					if ( $author_info_group > 0 ) {
 						echo '<section class="author clear">';
-						echo $this->get_author_info_by_field( 'image , name, description', $author_info_group, $author_post->ID );
+						echo $this->get_author_info_by_field( $author_info_group, $author_post->ID );
 						echo '</section>';
 					}
 				}
@@ -151,15 +163,17 @@
 		 */
 		public function show_post_author_info( $author_fields, $post_id = null ){
 			$author_info = '';
-			// there are 3 group ids for authors:
-
+			// save the fields that have to be shown in $author_fields_arr
+			$this->set_fields_array( $author_fields );
+			// there are 3 group ids for authors. loop through them and get thier info:
 			foreach ( $this->acf_field_ids as $acf_field_id ) {
-				// get all author fields, and show whatever of them exists
-				$this->set_authors_array( $acf_field_id, $post_id );
+				// input the author info in $authors_collection
+				$this->set_authors_array( $acf_field_id, $acf_field_id, $post_id );
 				// if there are fields, display them
-				if ( ! empty( $this->authors_collection[$acf_field_id] ) ) {
+
+				if ( ! empty( $this->authors_collection[$acf_field_id]['authorname'] ) ) {
 					$author_info .='<section class="author clear">';
-					$author_info .= $this->get_author_info_by_field( $author_fields, $acf_field_id, $post_id );
+					$author_info .= $this->get_author_info_by_field( $acf_field_id, $post_id );
 					$author_info .= '</section>';
 				}
 			}
@@ -170,6 +184,25 @@
 				<?php
 
 			}
+			// when finished, initialize the array, so when object is used by other hooks, it's empty
+			$this->reset_authors_array();
+		}
+
+		/**
+		 * mop_acf_specific_author hook callback function. used by author page template.
+		 * @param type $author_fields
+		 * @param type $author_group_id
+		 * @param type $post_id
+		 */
+		function page_template_author_info( $author_fields, $author_group_id = 1, $post_id = null ){
+			// save the fields that have to be shown in $author_fields_arr
+			$this->set_fields_array( $author_fields );
+			$this->set_authors_array( 1, $author_group_id, $post_id );
+			$author_info = '<section class="author clear">';
+			$author_info .= $this->get_author_info_by_field( 1, $post_id );
+			$author_info .= '</section>';
+			echo $author_info;
+			$this->reset_authors_array();
 		}
 
 		/**
@@ -178,7 +211,7 @@
 		 * @param type $comparer
 		 * @return string
 		 */
-		function author_meta_query( $field_value = '', $comparer = '=' ){
+		private function author_meta_query( $field_value = '', $comparer = '=' ){
 			/* build the meta_query in a loop so more fields can easily be added */
 			$meta_query = array();
 			$meta_query['relation'] = 'OR';
@@ -196,18 +229,18 @@
 		 * @param type $post_id
 		 * @return int
 		 */
-		function find_populated_author_field( $post_id ){
+		private function find_populated_author_field( $post_id ){
 			$ret = 0;
 			$found = false;
 			for ( $i = 3; $i >= 1; $i -- ) {
 				if ( ! $found ) {
-					$this->set_authors_array( $i, $post_id );
-					//echo $post_id.' '.$this->author_fields_values[$i]['authorname'].' '.$i.'<br>';
+					$cur_ind = count( $this->authors_collection ) + 1;
+					$this->set_authors_array( $cur_ind, $i, $post_id );
 					/* all 3 fields have to exist in order for the author to be displayed */
-					if ( ! empty( $this->authors_collection[$i]['authorname'] ) &&
-						! empty( $this->authors_collection[$i]['authordescription'] ) &&
-						! empty( $this->authors_collection[$i]['authorimage']['url'] ) ) {
-						$author_name = trim( $this->authors_collection[$i]['authorname'] );
+					if ( ! empty( $this->authors_collection[$cur_ind]['authorname'] ) &&
+						! empty( $this->authors_collection[$cur_ind]['authordescription'] ) &&
+						! empty( $this->authors_collection[$cur_ind]['authorimage']['url'] ) ) {
+						$author_name = trim( $this->authors_collection[$cur_ind]['authorname'] );
 						// bail early if this country has already been added
 						if ( in_array( $author_name, $this->random_authors ) ) {
 							continue;
@@ -220,56 +253,67 @@
 							break;
 						}
 					}
+					else {
+						// if the 3 fields don't exist, remove the current item from the array
+						array_pop( $this->authors_collection );
+					}
 				}
 			}
-			$this->reset_authors_array();
 			return $ret;
 		}
 
-		function set_authors_array( $group_id, $post_id ){
-			if ( ! isset( $this->authors_collection[$group_id] ) ) {
-				$this->authors_collection[$group_id]['authorname'] = get_field( 'authorname' . $group_id, $post_id );
-				$this->authors_collection[$group_id]['authordescription'] = get_field( 'authordescription' . $group_id, $post_id );
-				$this->authors_collection[$group_id]['authorimage'] = get_field( 'authorimage' . $group_id, $post_id );
-			}
-			// if no author name, reset the field
-			if ( empty( $this->authors_collection[$group_id]['authorname'] ) ) {
-				$this->authors_collection[$group_id] = array();
+		/**
+		 *
+		 * @param int $author_array_ind - index of $this->authors_collection to insert info to
+		 * @param int $group_id - id of the author field from which to get info
+		 * @param int $post_id - post id whose author info we're retrieving
+		 */
+		function set_authors_array( $author_array_ind, $group_id, $post_id ){
+			if ( ! isset( $this->authors_collection[$author_array_ind] ) ) {
+				$this->authors_collection[$author_array_ind]['authorname'] = get_field( 'authorname' . $group_id, $post_id );
+				if ( ! empty( $this->authors_collection[$author_array_ind]['authorname'] ) ) {
+					if ( in_array( 'description', $this->author_fields_arr ) ) {
+						$this->authors_collection[$author_array_ind]['authordescription'] = get_field( 'authordescription' . $group_id, $post_id );
+					}
+					if ( in_array( 'image', $this->author_fields_arr ) ) {
+						$this->authors_collection[$author_array_ind]['authorimage'] = get_field( 'authorimage' . $group_id, $post_id );
+					}
+				}
 			}
 		}
 
-		function reset_authors_array(){
+		private function reset_authors_array(){
 			$this->authors_collection = array();
 		}
 
-		function get_author_info_by_field( $author_fields, $author_group_id, $post_id = null ){
+		/**
+		 *
+		 * @param string $fields
+		 */
+		function set_fields_array( $fields ){
+			$this->author_fields_arr = array_map( 'trim', explode( ',', $fields ) );
+		}
+
+		function get_author_info_by_field( $author_group_id, $post_id = null ){
 			$author_info = '';
 			if ( $post_id == NULL ) {
 				$post_id = get_the_ID();
 			}
-			$author_fields_arr = explode( ',', $author_fields );
 
-			$this->authors_collection = array();
-			foreach ( $author_fields_arr as $author_field ) {
-				/* get the authorname first, because other fields depend on it. */
-				switch ( trim( $author_field ) ) {
+			foreach ( $this->author_fields_arr as $author_field ) {
+				switch ( $author_field ) {
 					case 'name':
-//						echo count( $author_fields_arr );
-//						echo '<br>';
-//						echo $author_group_id;
-//						echo '<br>';
-						//var_dump( $this->authors_collection[$author_group_id]);
 						/* if only the name is displayed, and there is more than on name, add a comma between each name */
-						if ( count( $author_fields_arr ) == 1 && $author_group_id > 1 && ! empty( $this->authors_collection[$author_group_id]['authorname'] ) ) {
+						if ( count( $this->author_fields_arr ) == 1 && $author_group_id > 1 && ! empty( $this->authors_collection[$author_group_id]['authorname'] ) ) {
 							$author_info.=', ';
 						}
 						$author_info .= $this->show_author_name( $author_group_id, $post_id );
 						break;
 					case 'image':
-						$author_info .= $this->show_author_image( $author_group_id, $post_id );
+						$author_info .= $this->show_author_image();
 						break;
 					case 'description':
-						$author_info .= $this->show_author_description( $author_group_id, $post_id );
+						$author_info .= $this->show_author_description();
 						break;
 
 					default:
@@ -281,20 +325,14 @@
 
 		/**
 		 * Display author name
-		 * @param type $author_group_id
+		 * @param type $collection_index
 		 */
-		function show_author_name( $author_group_id, $post_id = null ){
+		private function show_author_name( $group_id, $post_id ){
 			$ret = '';
-			if ( empty( $this->authors_collection[$author_group_id]['authorname'] ) ) {
-//echo '222 '.$author_group_id.'<br> ';
-				$this->authors_collection[$author_group_id]['authorname'] = get_field( 'authorname' . $author_group_id, $post_id );
-				/* if there is an author, print it, and save its value in the array.
-				 * We'll check that array before printing an image.
-				 * If an author name exists, but no image, print a default image
-				 */
+
+			if ( ! empty( $this->authors_collection[count( $this->authors_collection )]['authorname'] ) ) {
+				$ret.= '<a class="author-name" href="' . $this->create_author_page_url( $group_id, $post_id ) . '">' . $this->authors_collection[count( $this->authors_collection )]['authorname'] . '</a>';
 			}
-			//echo $this->authors_collection[$author_group_id]['authorname'].'<br>';
-			$ret.= '<a href="' . esc_url( add_query_arg( 'author', urlencode( $this->authors_collection[$author_group_id]['authorname'] ), get_page_link( $this->authors_page_id ) ) ) . '">' . $this->authors_collection[$author_group_id]['authorname'] . '</a>';
 
 			return $ret;
 		}
@@ -303,24 +341,21 @@
 		 * Display author image
 		 * @param type $author_group_id
 		 */
-		function show_author_image( $author_group_id, $post_id = null ){
-
+		private function show_author_image(){
 			$ret = '';
 
-			$value = get_field( 'authorimage' . $author_group_id, $post_id );
-			if ( isset( $value['url'] ) ) {
-				// get the image, with the size of fast_science
-				$ret = wp_get_attachment_image( $value['id'], 'scientific-2016-fast_science_size' );
+			if ( ! empty( $this->authors_collection[count( $this->authors_collection )]['authorimage'] ) ) {
+				// get the image, with the size of fast_science and the class of author-img
+				$ret = wp_get_attachment_image( $this->authors_collection[count( $this->authors_collection )]['authorimage']['id'], 'scientific-2016-fast_science_size', false, array( 'class' => 'author-img' ) );
 			}
 			else {
-				//echo '111';
 				/* No image could mean no author, or author whose information hasn't been fetched yet.
 				 * Check if it was fetched - if empty, then was fetched and no info - don't print image.
 				 * If not set - get the name, and if exists - save it and print image
 				 */
-				//if ( ! empty( $this->authors_collection[$author_group_id]['authorname'] ) ) {
-					$ret = '<img src="' . plugin_dir_url( __FILE__ ) . '../images/default_author.png" alt="' . __( 'default featured image', 'mop-acf-authors' ) . '">';
-				//}
+				if ( ! empty( $this->authors_collection[count( $this->authors_collection )]['authorname'] ) ) {
+					$ret = '<img class="author-img" src="' . plugin_dir_url( __FILE__ ) . '../images/default_author.png" alt="' . __( 'default featured image', 'mop-acf-authors' ) . '">';
+				}
 			}
 			return $ret;
 		}
@@ -329,18 +364,27 @@
 		 * Display author name
 		 * @param type $author_group_id
 		 */
-		function show_author_description( $author_group_id, $post_id = null ){
+		private function show_author_description(){
 			$ret = '';
-			$value = get_field( 'authordescription' . $author_group_id, $post_id );
-			if ( ! empty( $value ) ) {
-				$ret.= '<span>' . $value . '</span>';
+
+			if ( ! empty( $this->authors_collection[count( $this->authors_collection )]['authordescription'] ) ) {
+				$ret.= '<span class="author-desc">' . $this->authors_collection[count( $this->authors_collection )]['authordescription'] . '</span>';
 			}
 			return $ret;
 		}
 
+		private function create_author_page_url( $author_group_id, $post_id ){
+			return esc_url( add_query_arg(
+					array(
+				'author' => urlencode( $this->authors_collection[count($this->authors_collection)]['authorname'] ),
+				'group_id' => $author_group_id,
+				'post_id' => $post_id ), get_page_link( $this->authors_page_id )
+				) );
+		}
+
 		/* http://wordpress.stackexchange.com/questions/3396/create-custom-page-templates-with-plugins */
 
-		function page_template( $page_template ){
+		public function page_template( $page_template ){
 			if ( is_page( 'author-page' ) || is_page( $this->authors_page_id ) ) {
 				$page_template = dirname( __FILE__ ) . '/author_page.php';
 			}

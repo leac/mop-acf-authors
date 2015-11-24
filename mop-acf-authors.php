@@ -115,6 +115,8 @@
 			add_action( 'mop_acf_post_authors', array( $this->plugin_public, 'show_post_author_info' ) );
 			/* hook for getting all posts by given author - used by page template */
 			add_filter( 'mop_acf_posts_by_author', array( $this->plugin_public, 'posts_by_author' ) );
+			/* hook for getting a specific author's info */
+			add_filter( 'mop_acf_specific_author', array( $this->plugin_public, 'page_template_author_info' ), 10, 3 );
 			/* hook for showing the author page template */
 			add_filter( 'template_include', array( $this->plugin_public, 'page_template' ) );
 		}
