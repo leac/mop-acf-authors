@@ -24,7 +24,7 @@ get_header();
 		?>
 
 		<header class="page-header">
-		    <h1 class="page-title"><?php echo __( 'Articles by', 'mop-acf-authors' ) . ' ' . $author_name ?></h1>
+		    <h1 class="page-title"><?php _e( 'Articles by', 'mop-acf-authors' ) ; echo ' ' . $author_name ?></h1>
 		</header><!-- .page-header -->
 
 		<section class="page-authors-wrapper clear">
