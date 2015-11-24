@@ -91,7 +91,7 @@
 			/**
 			 * Define internationalization functionality of the plugin.
 			 */
-			$load = load_plugin_textdomain( 'mop-acf-authors', false, plugin_basename( dirname( __FILE__ ) ) . '/languages' );
+			load_plugin_textdomain( 'mop-acf-authors', false, plugin_basename( dirname( __FILE__ ) ) . '/languages' );
 
 			/**
 			 * The class responsible for defining all actions that occur in the public-facing
