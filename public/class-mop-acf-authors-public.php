@@ -111,11 +111,9 @@
 			// plugin shows 3 fields: 'image , name, description'
 			$this->set_fields_array( 'image, name, description' );
 
-			/* Get all posts that have at least one author */
-			$meta_query = $this->author_meta_query( '', '!=' );
+			/* Get a few posts. Since all posts have authors, no need to check if post has an author in the query */
 			$args = array(
-				'posts_per_page' => -1,
-				//'meta_query' => $meta_query
+				'posts_per_page' => 50
 			);
 			$all_author_posts = get_posts( $args );
 
