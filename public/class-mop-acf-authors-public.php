@@ -113,7 +113,8 @@
 
 			/* Get a few posts. Since all posts have authors, no need to check if post has an author in the query */
 			$args = array(
-				'posts_per_page' => 50
+				'posts_per_page' => 50,
+				'orderby'        => 'rand', // Lea 2017 - The new posts from teachers category don't have authors, so must take random posts and not only the last ones
 			);
 			$all_author_posts = get_posts( $args );
 
